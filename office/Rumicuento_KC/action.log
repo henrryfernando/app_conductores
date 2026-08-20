@@ -1,0 +1,29 @@
+[Fri Dec 05 15:09:55 UTC 2025][INFO] [Action] EE NewBook
+[Fri Dec 05 15:09:55 UTC 2025][INFO] [Action] EE ZoomPage
+[Fri Dec 05 15:10:22 UTC 2025][INFO] [Action] E ItemChanged - 1,5
+[Fri Dec 05 15:10:22 UTC 2025][INFO] [Action] EE ZoomPage
+[Fri Dec 05 15:10:29 UTC 2025][INFO] [Action] E PreviewBook - 5
+[Fri Dec 05 15:12:20 UTC 2025][INFO] [Action] EE ZoomPage
+[Fri Dec 05 15:12:21 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:27 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:28 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:33 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:33 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:34 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:34 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:34 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:34 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:34 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:35 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:35 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:35 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:35 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:12:35 UTC 2025][INFO] [Action] EE Scroll
+[Fri Dec 05 15:13:40 UTC 2025][INFO] [Action] E ItemChanged - 0,2
+[Fri Dec 05 15:13:40 UTC 2025][INFO] [Action] EE ZoomPage
+[Fri Dec 05 15:13:47 UTC 2025][INFO] [Action] E SaveBook - SaveforExport
+[Fri Dec 05 15:14:26 UTC 2025][INFO] [Action] EE PackageWorkspace
+[Fri Dec 05 15:14:39 UTC 2025][INFO] [Action] E SaveBook - SaveforExport
+[Sat Dec 13 23:28:45 UTC 2025][INFO] [Action] EE PackageWorkspace
+[Sat Dec 13 23:28:48 UTC 2025][INFO] [Action] E SaveBook - Save
+[Sat Dec 13 23:28:50 UTC 2025][INFO] Logger Terminated

@@ -1,0 +1,29 @@
+{
+   "book_state" : {
+      "book_fl_type" : 1,
+      "book_input_type" : 1,
+      "book_reading_direction" : 1,
+      "book_reading_option" : 1,
+      "book_target_type" : 3,
+      "book_virtual_panelmovement" : 0
+   },
+   "content_hash" : null,
+   "metadata" : {
+      "book_path" : "resources",
+      "edited_tool_versions" : [ "1.107.0.0" ],
+      "format" : "yj",
+      "global_styling" : true,
+      "id" : "9138b90d-a35a-4afa-acde-28deee09f8a6",
+      "platform" : "win",
+      "tool_name" : "KC",
+      "tool_version" : "1.107.0.0"
+   },
+   "tool_data" : {
+      "cache_path" : "resources/.cache",
+      "created_on" : "2025-Dec-05 16:09:22",
+      "last_modified_time" : "2025-Dec-14 00:28:48",
+      "link_extract_choice" : false,
+      "link_notification_preference" : true
+   }
+}
+
