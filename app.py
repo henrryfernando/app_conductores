@@ -6,7 +6,7 @@ import streamlit as st
 import urllib.parse
 import folium
 from streamlit_folium import st_folium
-from streamlit_js_eval import get_geolocation
+from streamlit_geolocation import streamlit_geolocation
 
 DB_NAME = "transporte_mayores.db"
 
@@ -63,18 +63,20 @@ def init_db():
             );
         """)
 
-        # Migraciones
-        for col, dtype in [
+        cursor.execute("PRAGMA table_info(servicios);")
+        columnas_existentes = [col[1] for col in cursor.fetchall()]
+
+        columnas_a_agregar = [
             ("estado_actual", "TEXT DEFAULT 'Pendiente'"),
             ("incidencia", "TEXT DEFAULT ''"),
             ("latitud", "REAL DEFAULT 43.538100"),
             ("longitud", "REAL DEFAULT -5.663500"),
             ("fecha_especifica", "TEXT DEFAULT NULL")
-        ]:
-            try:
+        ]
+
+        for col, dtype in columnas_a_agregar:
+            if col not in columnas_existentes:
                 cursor.execute(f"ALTER TABLE servicios ADD COLUMN {col} {dtype};")
-            except sqlite3.OperationalError:
-                pass
 
         conn.commit()
 
@@ -84,37 +86,123 @@ init_db()
 # CONFIGURACIÓN DE PÁGINA Y ESTILOS
 # ---------------------------------------------------------
 st.set_page_config(
-    page_title="Gestión de Transporte Geriátrico",
-    page_icon="🚌",
+    page_title="Rutas Senior - Gestión de Transporte",
+    page_icon="🩵",
     layout="wide",
 )
 
 st.markdown("""
     <style>
-    .card-route {
-        background-color: #f8f9fa;
-        border-left: 5px solid #007bff;
-        padding: 15px;
-        border-radius: 8px;
-        margin-bottom: 10px;
-        color: #212529;
+    body {
+        background-color: #f4f6f9;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    .badge-wheelchair { background-color: #ff4b4b; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
-    .badge-autonomo { background-color: #28a745; color: white; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
-    .badge-asistencia { background-color: #ffc107; color: black; padding: 3px 8px; border-radius: 12px; font-size: 12px; }
+    .main .block-container {
+        padding-top: 1.5rem;
+        padding-bottom: 2rem;
+    }
+    
+    .app-header {
+        background: linear-gradient(135deg, #0b2545 0%, #134074 100%);
+        padding: 22px 30px;
+        border-radius: 12px;
+        color: white;
+        margin-bottom: 25px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    .app-header h1 {
+        color: #ffffff;
+        margin: 0;
+        font-size: 26px;
+        font-weight: 700;
+    }
+    .app-header p {
+        color: #8da9c4;
+        margin: 4px 0 0 0;
+        font-size: 14px;
+    }
+
+    /* KPI Cards Dashboard */
+    .kpi-card {
+        background-color: #ffffff;
+        border-radius: 10px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        border-top: 4px solid #134074;
+        text-align: center;
+    }
+    .kpi-card-title {
+        font-size: 13px;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-bottom: 5px;
+    }
+    .kpi-card-value {
+        font-size: 28px;
+        font-weight: 700;
+        color: #0b2545;
+    }
+
+    .card-route {
+        background-color: #ffffff;
+        border-left: 5px solid #00b4d8;
+        padding: 14px 16px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        color: #1d2d44;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+    
+    .badge-wheelchair { background-color: #e63946; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .badge-autonomo { background-color: #2a9d8f; color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    .badge-asistencia { background-color: #e9c46a; color: #1d2d44; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+    
     .mobile-container {
         max-width: 480px;
         margin: 0 auto;
-        border: 10px solid #333;
-        border-radius: 20px;
-        padding: 15px;
-        background-color: #ffffff;
+        border: 12px solid #1d2d44;
+        border-radius: 30px;
+        padding: 18px;
+        background-color: #f8f9fa;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
     }
-    .cal-header { font-weight: bold; text-align: center; background-color: #007bff; color: white; padding: 5px; border-radius: 4px; }
+    
+    .cal-header { 
+        font-weight: 600; 
+        text-align: center; 
+        background-color: #134074; 
+        color: white; 
+        padding: 6px; 
+        border-radius: 6px; 
+        font-size: 12px;
+    }
+    
+    /* SIDEBAR TEXT COLOR & SELECTBOX CONTRAST */
+    [data-testid="stSidebar"] {
+        background-color: #0b2545;
+    }
+    [data-testid="stSidebar"] * {
+        color: #e0e1dd;
+    }
+    [data-testid="stSidebar"] div[data-baseweb="select"] * {
+        color: #1d2d44 !important;
+        font-weight: 600;
+    }
+    [data-testid="stSidebar"] div[role="listbox"] * {
+        color: #1d2d44 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
-st.title("🚌 Sistema de Gestión de Transporte Geriátrico")
+st.markdown("""
+    <div class="app-header">
+        <div>
+            <h1>🩵 Rutas Senior</h1>
+            <p>Plataforma de Gestión de Transporte y Movilidad de Personas Mayores</p>
+        </div>
+    </div>
+""", unsafe_allow_html=True)
 
 opcion = st.sidebar.selectbox(
     "📌 MENÚ DE NAVEGACIÓN",
@@ -155,45 +243,73 @@ if opcion == "📊 Dashboard / Resumen General":
         WHERE s.estado_actual != 'Pendiente' AND s.estado_actual != 'Entregado en Destino'
     """
     df_gps = pd.read_sql_query(query_gps, conn)
+    df_todos_cond = pd.read_sql_query("SELECT id, nombre FROM conductores WHERE estado='Activo'", conn)
     conn.close()
 
-    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-    col_m1.metric("Residentes Activos", total_users)
-    col_m2.metric("Conductores Disponibles", total_cond)
-    col_m3.metric("Servicios Programados", total_serv)
-    col_m4.metric("Requieren Silla ♿", sillas)
+    # Métricas de Estilo Tarjeta Acomodadas
+    m1, m2, m3, m4 = st.columns(4)
+    m1.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Residentes Activos</div><div class="kpi-card-value">{total_users}</div></div>', unsafe_allow_html=True)
+    m2.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Conductores Disponibles</div><div class="kpi-card-value">{total_cond}</div></div>', unsafe_allow_html=True)
+    m3.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Servicios Programados</div><div class="kpi-card-value">{total_serv}</div></div>', unsafe_allow_html=True)
+    m4.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Requieren Silla ♿</div><div class="kpi-card-value">{sillas}</div></div>', unsafe_allow_html=True)
 
     st.markdown("---")
-    st.subheader("🗺️ Ubicación de Ambulancias / Vehículos en Ruta")
 
-    if not df_gps.empty:
-        lat_centro = df_gps['lat'].mean()
-        lon_centro = df_gps['lon'].mean()
+    # Layout Principal: Selector a la izquierda, Mapa a la derecha
+    col_izq, col_der = st.columns([1, 2.3])
 
-        m = folium.Map(location=[lat_centro, lon_centro], zoom_start=15)
+    with col_izq:
+        st.subheader("🚐 Selección de Vehículo")
+        if not df_todos_cond.empty:
+            conductor_fuerza = st.selectbox(
+                "Filtrar Ambulancia / Vehículo:",
+                options=["Todas las Ambulancias"] + df_todos_cond["nombre"].tolist(),
+                key="dash_cond_filter"
+            )
+        else:
+            conductor_fuerza = "Todas las Ambulancias"
+            st.info("No hay conductores registrados.")
 
-        for _, row in df_gps.iterrows():
-            popup_text = f"<b>Conductor:</b> {row['Conductor']}<br><b>Residente:</b> {row['Residente']}<br><b>Estado:</b> {row['Estado']}<br><b>Incidencia:</b> {row['Incidencia'] or 'Ninguna'}"
-            folium.Marker(
-                [row['lat'], row['lon']],
-                popup=popup_text,
-                tooltip=f"🚗 Conductor: {row['Conductor']}",
-                icon=folium.Icon(color="red", icon="ambulance", prefix="fa")
-            ).add_to(m)
+        st.markdown("""
+        **Resumen de Ruta Activa**  
+        Selecciona un vehículo para enfocar la posición GPS y sus datos de monitoreo en tiempo real sobre el mapa de la derecha.
+        """)
 
-        st_folium(m, width=1000, height=500)
-        
-        st.subheader("📋 Estado Detallado del Servicio")
-        st.dataframe(df_gps[['Conductor', 'Residente', 'Tipo', 'Estado', 'Incidencia']], use_container_width=True)
-    else:
-        st.info("No hay vehículos en trayecto activo actualmente ('En Camino' o 'Recogido'). Pasa al Módulo 4 y cambia el estado del servicio a 'En Camino' para visualizar el vehículo en el mapa.")
+    with col_der:
+        st.subheader("🗺️ Monitoreo de Ambulancias en Ruta")
+
+        # Filtrado de DataFrame GPS
+        df_gps_filtered = df_gps.copy()
+        if conductor_fuerza != "Todas las Ambulancias" and not df_gps.empty:
+            df_gps_filtered = df_gps[df_gps['Conductor'] == conductor_fuerza]
+
+        if not df_gps_filtered.empty:
+            lat_centro = df_gps_filtered['lat'].mean()
+            lon_centro = df_gps_filtered['lon'].mean()
+
+            m = folium.Map(location=[lat_centro, lon_centro], zoom_start=15)
+
+            for _, row in df_gps_filtered.iterrows():
+                popup_text = f"<b>Conductor:</b> {row['Conductor']}<br><b>Residente:</b> {row['Residente']}<br><b>Estado:</b> {row['Estado']}<br><b>Incidencia:</b> {row['Incidencia'] or 'Ninguna'}"
+                folium.Marker(
+                    [row['lat'], row['lon']],
+                    popup=popup_text,
+                    tooltip=f"🚗 Conductor: {row['Conductor']}",
+                    icon=folium.Icon(color="red", icon="ambulance", prefix="fa")
+                ).add_to(m)
+
+            st_folium(m, width=800, height=450)
+            
+            st.subheader("📋 Estado Detallado del Servicio")
+            st.dataframe(df_gps_filtered[['Conductor', 'Residente', 'Tipo', 'Estado', 'Incidencia']], use_container_width=True)
+        else:
+            st.info("No hay vehículos en trayecto activo actualmente para la selección actual.")
 
 # ---------------------------------------------------------
 # HOJAS DE RUTA POR DÍA DE LA SEMANA
 # ---------------------------------------------------------
 elif opcion == "📅 Hojas de Ruta por Día de Semana":
     st.header("📅 Hojas de Ruta Organizadas por Día de la Semana")
-    st.caption("Consulta el cronograma global para todos los conductores y pacientes según el día seleccionado.")
 
     dia_sel = st.selectbox("🗓️ Selecciona un día de la semana:", DIAS_SEMANA)
 
@@ -215,14 +331,11 @@ elif opcion == "📅 Hojas de Ruta por Día de Semana":
 
     if not df_dia.empty:
         st.subheader(f"📋 Cronograma Global - {dia_sel} ({len(df_dia)} trayectos)")
-        
-        # Agrupación por conductor
         conductores_unicos = df_dia['Conductor Asignado'].unique()
         for cond in conductores_unicos:
             with st.expander(f"🚗 Conductor: {cond}", expanded=True):
                 df_cond = df_dia[df_dia['Conductor Asignado'] == cond]
                 st.dataframe(df_cond.drop(columns=['Conductor Asignado']), use_container_width=True)
-        
         st.markdown("---")
         st.subheader("📊 Tabla Consolidada")
         st.dataframe(df_dia, use_container_width=True)
@@ -271,7 +384,6 @@ elif opcion == "📆 Calendario Mensual y Programación":
         nombre_dia_sem = dias_map[fecha_act.weekday()]
         fecha_str = fecha_act.strftime("%Y-%m-%d")
 
-        # 1. Buscar primero trayectos asignados específicamente a esta fecha puntual
         query_especificos = """
             SELECT s.id, s.hora as Hora, s.tipo_servicio as Tipo, u.nombre as Paciente, 
                    c.nombre as Conductor, s.estado_actual as Estado
@@ -283,7 +395,6 @@ elif opcion == "📆 Calendario Mensual y Programación":
         """
         df_fecha = pd.read_sql_query(query_especificos, conn, params=(fecha_str,))
 
-        # 2. Si no hay nada programado puntualmente para esa fecha, buscar la plantilla semanal habitual
         es_rutina_semanal = False
         if df_fecha.empty:
             query_rutina = """
@@ -312,7 +423,7 @@ elif opcion == "📆 Calendario Mensual y Programación":
             
             st.dataframe(df_fecha, use_container_width=True)
         else:
-            st.info(f"No hay trayectos guardados para el {fecha_act.strftime('%d/%m/%Y')}. Agrega uno nuevo a continuación:")
+            st.info(f"No hay trayectos guardados para el {fecha_act.strftime('%d/%m/%Y')}.")
 
         st.markdown("---")
         st.subheader(f"➕ Añadir Trayecto Específico al {fecha_act.strftime('%d/%m/%Y')}")
@@ -330,7 +441,7 @@ elif opcion == "📆 Calendario Mensual y Programación":
                             INSERT INTO servicios (usuario_id, tipo_servicio, hora, conductor_id, dias_servicio, fecha_especifica)
                             VALUES (?, ?, ?, ?, ?, ?)
                         """, (u_id, tipo_s, hora_str, c_id, nombre_dia_sem, fecha_str))
-                    st.toast("✅ Trayecto guardado para esta fecha")
+                    st.toast("✅ Guardado con éxito")
                     st.rerun()
 
 # ---------------------------------------------------------
@@ -516,8 +627,16 @@ elif opcion == "📋 Módulo 3: Programación de Servicios":
                 
                 with st.form("form_edit_servicio"):
                     e_tipo_s = st.selectbox("Tipo de Servicio:", ["Recogida", "Vuelta a Casa"], index=0 if datos_serv["Tipo"] == "Recogida" else 1)
-                    e_hora_s = st.time_input("Hora Programada", value=datetime.strptime(datos_serv["Hora"], "%H:%M").time())
-                    e_dias_serv = st.multiselect("Días:", DIAS_SEMANA, default=[d for d in datos_serv["Días"].split(", ") if d in DIAS_SEMANA])
+                    
+                    hora_str = str(datos_serv["Hora"])
+                    fmt = "%H:%M:%S" if len(hora_str) == 8 else "%H:%M"
+                    e_hora_s = st.time_input("Hora Programada", value=datetime.strptime(hora_str, fmt).time())
+                    
+                    dias_val = datos_serv["Días"]
+                    dias_lista = str(dias_val).split(", ") if pd.notna(dias_val) and dias_val is not None else []
+                    default_dias = [d for d in dias_lista if d in DIAS_SEMANA]
+                    
+                    e_dias_serv = st.multiselect("Días:", DIAS_SEMANA, default=default_dias)
                     
                     if st.form_submit_button("Guardar Cambios"):
                         with get_connection() as conn:
@@ -535,7 +654,7 @@ elif opcion == "📋 Módulo 3: Programación de Servicios":
                     st.rerun()
 
 # ---------------------------------------------------------
-# MÓDULO 4: VISTA MÓVIL DEL CONDUCTOR
+# MÓDULO 4: VISTA MÓVIL DEL CONDUCTOR (MI RUTA DE HOY)
 # ---------------------------------------------------------
 elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
     st.header("📱 Panel Móvil del Conductor")
@@ -550,7 +669,7 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
 
         conn = get_connection()
         query_ruta = """
-            SELECT s.id as servicio_id, s.hora as Hora, s.tipo_servicio as Tipo, u.nombre as Usuario, 
+            SELECT s.id as servicio_id, s.hora as Hora, s.tipo_servicio as Tipo, u.nombre as Paciente, 
                    u.estado_movilidad as Movilidad, u.direccion as Dirección, 
                    u.persona_contacto as Contacto, u.telefono_contacto as Teléfono, 
                    s.estado_actual, s.incidencia, s.latitud, s.longitud
@@ -563,11 +682,13 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
         conn.close()
 
         st.markdown('<div class="mobile-container">', unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center;'>📋 Ruta de Hoy</h3>", unsafe_allow_html=True)
-        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: #134074;'>📋 Mi Ruta de Hoy</h3>", unsafe_allow_html=True)
+        st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
 
         if not df_ruta.empty:
-            for _, fila in df_ruta.iterrows():
+            opciones_estados = ["Pendiente", "En Camino", "Paciente Recogido", "Entregado en Destino", "Incidencia"]
+
+            for idx, fila in df_ruta.iterrows():
                 s_id = fila['servicio_id']
                 mov = fila['Movilidad']
                 
@@ -584,88 +705,63 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                         <small><b>{fila['Tipo']}</b></small>
                     </div>
                     <div style="margin-top: 5px;">
-                        <strong>👤 {fila['Usuario']}</strong> {badge_html}
+                        <strong>👤 {fila['Paciente']}</strong> {badge_html}
                     </div>
                     <div style="font-size: 13px; margin-top: 4px;">📍 {fila['Dirección']}</div>
                     <div style="font-size: 12px; color: #555;">📞 {fila['Contacto']}: {fila['Teléfono']}</div>
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Navegación
-                direccion_encoded = urllib.parse.quote(fila['Dirección'])
-                st.markdown(f"[🗺️ Abrir Ruta en Google Maps](https://www.google.com/maps/search/?api=1&query={direccion_encoded})")
+                # --- MINIMAPA GPS ESTILO GOOGLE MAPS ---
+                lat_amb = fila['latitud'] if pd.notna(fila['latitud']) else 43.538100
+                lon_amb = fila['longitud'] if pd.notna(fila['longitud']) else -5.663500
 
-                # Estado del Servicio
-                estado_act = fila['estado_actual'] or "Pendiente"
-                st.caption(f"Estado Actual: **{estado_act}**")
+                mini_map = folium.Map(location=[lat_amb, lon_amb], zoom_start=15, zoom_control=False)
                 
-                c_b1, c_b2, c_b3 = st.columns(3)
-                with c_b1:
-                    if st.button("🚚 En camino", key=f"btn_cam_{s_id}"):
-                        with get_connection() as conn:
-                            conn.execute("UPDATE servicios SET estado_actual = 'En Camino' WHERE id = ?", (s_id,))
-                        st.toast("✅ Guardado con éxito")
-                        st.rerun()
+                folium.Marker(
+                    [lat_amb, lon_amb],
+                    popup=f"Ambulancia / Vehículo ({fila['Tipo']})",
+                    tooltip="🚑 Ubicación GPS de Ambulancia",
+                    icon=folium.Icon(color="red", icon="ambulance", prefix="fa")
+                ).add_to(mini_map)
 
-                with c_b2:
-                    if st.button("📍 Recogido", key=f"btn_rec_{s_id}"):
-                        with get_connection() as conn:
-                            conn.execute("UPDATE servicios SET estado_actual = 'Recogido' WHERE id = ?", (s_id,))
-                        st.toast("✅ Guardado con éxito")
-                        st.rerun()
+                st_folium(mini_map, key=f"minimap_{s_id}_{idx}", width=410, height=200)
 
-                with c_b3:
-                    if st.button("🏁 Entregado", key=f"btn_ent_{s_id}"):
-                        with get_connection() as conn:
-                            conn.execute("UPDATE servicios SET estado_actual = 'Entregado en Destino' WHERE id = ?", (s_id,))
-                        st.toast("✅ Guardado con éxito")
-                        st.rerun()
+                # Enlace directo a Google Maps
+                direccion_encoded = urllib.parse.quote(fila['Dirección'])
+                st.markdown(f"[🗺️ Abrir Navegación en Google Maps](https://www.google.com/maps/search/?api=1&query={direccion_encoded})")
 
-                # Captura GPS
-                with st.expander("📡 Transmitir Ubicación GPS (Móvil / Automático)"):
-                    loc = get_geolocation(component_key=f"geo_{s_id}")
-                    if loc and 'coords' in loc:
-                        lat_auto = loc['coords']['latitude']
-                        lon_auto = loc['coords']['longitude']
-                        st.success(f"GPS capturado: Lat {lat_auto:.4f}, Lon {lon_auto:.4f}")
-                        
-                        if st.button("Enviar Mi Ubicación Actual al Mapa", key=f"btn_gps_auto_{s_id}"):
-                            with get_connection() as conn:
-                                conn.execute("UPDATE servicios SET latitud = ?, longitud = ? WHERE id = ?", (lat_auto, lon_auto, s_id))
-                            st.toast("✅ Guardado con éxito")
-                            st.rerun()
+                # Selector de cambio de Estado y capturador GPS automático
+                estado_actual_val = fila['estado_actual'] if fila['estado_actual'] in opciones_estados else "Pendiente"
+                idx_est = opciones_estados.index(estado_actual_val)
+
+                with st.expander("📍 Actualizar Estado / Ubicación GPS", expanded=False):
+                    nuevo_estado = st.selectbox("Estado del Trayecto:", opciones_estados, index=idx_est, key=f"est_{s_id}")
+                    
+                    st.write("Presiona para obtener tu ubicación GPS:")
+                    location = streamlit_geolocation()
+
+                    if location and location.get("latitude") and location.get("longitude"):
+                        nueva_lat = location["latitude"]
+                        nueva_lon = location["longitude"]
+                        st.success(f"📍 GPS Detectado: {nueva_lat:.5f}, {nueva_lon:.5f}")
                     else:
-                        st.info("Presiona 'Permitir' cuando el navegador pida acceso a la ubicación GPS.")
+                        nueva_lat = float(lat_amb)
+                        nueva_lon = float(lon_amb)
 
-                # Entrada Manual
-                with st.expander("⚙️ Ajustar Coordenadas Manualmente (Pruebas)"):
-                    c_lat, c_lon = st.columns(2)
-                    new_lat = c_lat.number_input("Latitud", value=float(fila['latitud'] or 43.538100), format="%.6f", key=f"lat_{s_id}")
-                    new_lon = c_lon.number_input("Longitud", value=float(fila['longitud'] or -5.663500), format="%.6f", key=f"lon_{s_id}")
-                    if st.button("Guardar Coordenadas Manuales", key=f"btn_gps_man_{s_id}"):
+                    if st.button("💾 Guardar Estado y GPS", key=f"btn_save_{s_id}"):
                         with get_connection() as conn:
-                            conn.execute("UPDATE servicios SET latitud = ?, longitud = ? WHERE id = ?", (new_lat, new_lon, s_id))
-                        st.toast("✅ Guardado con éxito")
+                            conn.execute("""
+                                UPDATE servicios 
+                                SET estado_actual = ?, latitud = ?, longitud = ? 
+                                WHERE id = ?
+                            """, (nuevo_estado, nueva_lat, nueva_lon, s_id))
+                        st.toast("✅ Estado y ubicación GPS actualizados")
                         st.rerun()
 
-                # Incidencias
-                with st.expander("⚠️ Registrar Inconveniente / Observación"):
-                    inc_texto = st.text_area("Mensaje:", value=fila['incidencia'] or "", key=f"txt_{s_id}")
-                    if st.button("Guardar Nota", key=f"btn_inc_{s_id}"):
-                        with get_connection() as conn:
-                            conn.execute("UPDATE servicios SET incidencia = ? WHERE id = ?", (inc_texto, s_id))
-                        st.toast("✅ Guardado con éxito")
-                        st.rerun()
-
-                st.markdown("---")
-        else:
-            st.info("Sin servicios programados hoy para este conductor.")
+                st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
 
         st.markdown('</div>', unsafe_allow_html=True)
-
-
-
-
-
-
+    else:
+        st.info("No hay conductores activos para mostrar.")
 
