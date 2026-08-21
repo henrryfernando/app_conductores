@@ -7,6 +7,54 @@ from streamlit_geolocation import streamlit_geolocation
 import urllib.parse
 
 # ---------------------------------------------------------
+# INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS (Solución al error)
+# ---------------------------------------------------------
+def init_db():
+    conn = sqlite3.connect("ambulancias.db")
+    cursor = conn.cursor()
+    # Crear tablas si no existen
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS usuarios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT,
+            direccion TEXT,
+            estado_movilidad TEXT,
+            persona_contacto TEXT,
+            telefono_contacto TEXT,
+            estado TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS conductores (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT,
+            estado TEXT
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS servicios (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            usuario_id INTEGER,
+            conductor_id INTEGER,
+            tipo_servicio TEXT,
+            estado_actual TEXT,
+            latitud REAL,
+            longitud REAL,
+            hora TEXT,
+            incidencia TEXT,
+            FOREIGN KEY(usuario_id) REFERENCES usuarios(id),
+            FOREIGN KEY(conductor_id) REFERENCES conductores(id)
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+# LLAMA A ESTO AL INICIO DEL SCRIPT
+init_db()
+
+
+
+# ---------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
 # ---------------------------------------------------------
 st.set_page_config(
@@ -55,6 +103,47 @@ st.markdown("""
         padding: 2px 6px;
         border-radius: 4px;
         font-size: 11px;
+    }
+    /* Estilos de badges por Estado del Trayecto */
+    .badge-estado-pendiente {
+        background-color: #6c757d;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .badge-estado-encamino {
+        background-color: #ffc107;
+        color: #000;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .badge-estado-recogido {
+        background-color: #0d6efd;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .badge-estado-entregado {
+        background-color: #198754;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .badge-estado-incidencia {
+        background-color: #dc3545;
+        color: white;
+        padding: 3px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: bold;
     }
     .mobile-container {
         max-width: 500px;
@@ -208,20 +297,36 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
             for idx, fila in df_ruta.iterrows():
                 s_id = fila['servicio_id']
                 mov = fila['Movilidad']
+                estado_actual = fila['estado_actual'] if fila['estado_actual'] in opciones_estados else "Pendiente"
                 
+                # Definición de insignia de tipo de movilidad
                 badge_html = (
                     '<span class="badge-wheelchair">♿ Silla</span>' if mov == 'Silla de ruedas' 
                     else '<span class="badge-asistencia">🤝 Asistencia</span>' if mov == 'Asistencia' 
                     else '<span class="badge-autonomo">🚶 Autónomo</span>'
                 )
 
+                # Definición de colores para el estado actual del trayecto
+                if estado_actual == "Pendiente":
+                    badge_estado_html = '<span class="badge-estado-pendiente">⏳ Pendiente</span>'
+                elif estado_actual == "En Camino":
+                    badge_estado_html = '<span class="badge-estado-encamino">🚗 En Camino</span>'
+                elif estado_actual == "Paciente Recogido":
+                    badge_estado_html = '<span class="badge-estado-recogido">👤 Paciente Recogido</span>'
+                elif estado_actual == "Entregado en Destino":
+                    badge_estado_html = '<span class="badge-estado-entregado">🏁 Entregado en Destino</span>'
+                elif estado_actual == "Incidencia":
+                    badge_estado_html = '<span class="badge-estado-incidencia">⚠️ Incidencia</span>'
+                else:
+                    badge_estado_html = f'<span class="badge-estado-pendiente">{estado_actual}</span>'
+
                 st.markdown(f"""
                 <div class="card-route">
-                    <div style="display: flex; justify-content: space-between;">
-                        <strong>⏰ {fila['Hora']}</strong>
-                        <small><b>{fila['Tipo']}</b></small>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong>⏰ {fila['Hora']} ({fila['Tipo']})</strong>
+                        {badge_estado_html}
                     </div>
-                    <div style="margin-top: 5px;">
+                    <div style="margin-top: 8px;">
                         <strong>👤 {fila['Paciente']}</strong> {badge_html}
                     </div>
                     <div style="font-size: 13px; margin-top: 4px;">📍 Dirección Paciente: {fila['Dirección']}</div>
@@ -229,11 +334,22 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                 </div>
                 """, unsafe_allow_html=True)
 
+                # Reproducción de sonido si el estado es "Paciente Recogido"
+                if estado_actual == "Paciente Recogido":
+                    sound_url = "https://www.soundjay.com/buttons/sounds/button-3.mp3"
+                    st.components.v1.html(
+                        f"""
+                        <audio autoplay>
+                            <source src="{sound_url}" type="audio/mpeg">
+                        </audio>
+                        """,
+                        height=0
+                    )
+
                 # Pestañas para alternar entre Mapa del Paciente y Google Maps de Navegación
                 tab_paciente, tab_navegacion = st.tabs(["📍 Ubicación Paciente", "🗺️ Ruta GPS en Vivo (Google Maps)"])
 
                 with tab_paciente:
-                    # Coordenadas fojas del lugar del paciente (o fallback a Gijón)
                     lat_paciente = fila['latitud'] if pd.notna(fila['latitud']) else 43.538100
                     lon_paciente = fila['longitud'] if pd.notna(fila['longitud']) else -5.663500
 
@@ -252,7 +368,6 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                     direccion_encoded = urllib.parse.quote(fila['Dirección'])
                     
                     if gps_lat is not None and gps_lon is not None:
-                        # Carga el iframe interactivo con el recorrido desde el GPS del conductor hasta el paciente
                         map_route_url = f"https://maps.google.com/maps?saddr={gps_lat},{gps_lon}&daddr={direccion_encoded}&output=embed"
                         st.components.v1.iframe(map_route_url, height=300, scrolling=True)
                     else:
@@ -260,13 +375,12 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                         map_dest_url = f"https://maps.google.com/maps?q={direccion_encoded}&output=embed"
                         st.components.v1.iframe(map_dest_url, height=300, scrolling=True)
 
-                estado_actual_val = fila['estado_actual'] if fila['estado_actual'] in opciones_estados else "Pendiente"
-                idx_est = opciones_estados.index(estado_actual_val)
+                idx_est = opciones_estados.index(estado_actual)
 
                 with st.expander("📍 Actualizar Estado / Ubicación GPS", expanded=False):
-                    nuevo_estado = st.selectbox("Estado del Trayecto:", opciones_estados, index=idx_est, key=f"est_{s_id}")
+                    nuevo_estado = st.selectbox("Cambiar Estado del Trayecto:", opciones_estados, index=idx_est, key=f"est_{s_id}")
 
-                    if st.button("💾 Guardar Estado y GPS", key=f"btn_save_{s_id}"):
+                    if st.button("💾 Guardar Estado y Transmitir GPS", key=f"btn_save_{s_id}"):
                         final_lat = gps_lat if gps_lat is not None else 43.538100
                         final_lon = gps_lon if gps_lon is not None else -5.663500
 
@@ -276,7 +390,8 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                                 SET estado_actual = ?, latitud = ?, longitud = ? 
                                 WHERE id = ?
                             """, (nuevo_estado, final_lat, final_lon, s_id))
-                        st.toast("✅ Estado y ubicación transmitidos correctamente")
+                        
+                        st.toast(f"✅ Estado cambiado a '{nuevo_estado}'")
                         st.rerun()
 
                 st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
@@ -284,4 +399,5 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("No hay conductores activos para mostrar.")
+
 
