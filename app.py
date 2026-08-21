@@ -1244,5 +1244,3 @@ elif opcion == "⚙️ Administración de Usuarios y Sistema":
                     st.toast("✅ Permisos actualizados correctamente")
                     st.rerun()
 
-=======
->>>>>>> e448eb1b48330eb944392073f7a7a1d0f701ca0c
