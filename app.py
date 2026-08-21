@@ -246,7 +246,6 @@ if opcion == "📊 Dashboard / Resumen General":
     df_todos_cond = pd.read_sql_query("SELECT id, nombre FROM conductores WHERE estado='Activo'", conn)
     conn.close()
 
-    # Métricas de Estilo Tarjeta Acomodadas
     m1, m2, m3, m4 = st.columns(4)
     m1.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Residentes Activos</div><div class="kpi-card-value">{total_users}</div></div>', unsafe_allow_html=True)
     m2.markdown(f'<div class="kpi-card"><div class="kpi-card-title">Conductores Disponibles</div><div class="kpi-card-value">{total_cond}</div></div>', unsafe_allow_html=True)
@@ -255,7 +254,6 @@ if opcion == "📊 Dashboard / Resumen General":
 
     st.markdown("---")
 
-    # Layout Principal: Selector a la izquierda, Mapa a la derecha
     col_izq, col_der = st.columns([1, 2.3])
 
     with col_izq:
@@ -278,7 +276,6 @@ if opcion == "📊 Dashboard / Resumen General":
     with col_der:
         st.subheader("🗺️ Monitoreo de Ambulancias en Ruta")
 
-        # Filtrado de DataFrame GPS
         df_gps_filtered = df_gps.copy()
         if conductor_fuerza != "Todas las Ambulancias" and not df_gps.empty:
             df_gps_filtered = df_gps[df_gps['Conductor'] == conductor_fuerza]
@@ -301,7 +298,7 @@ if opcion == "📊 Dashboard / Resumen General":
             st_folium(m, width=800, height=450)
             
             st.subheader("📋 Estado Detallado del Servicio")
-            st.dataframe(df_gps_filtered[['Conductor', 'Residente', 'Tipo', 'Estado', 'Incidencia']], use_container_width=True)
+            st.dataframe(df_gps_filtered[['Conductor', 'Residente', 'Tipo', 'Estado', 'Incidencia']], use_container_width='stretch')
         else:
             st.info("No hay vehículos en trayecto activo actualmente para la selección actual.")
 
@@ -314,12 +311,13 @@ elif opcion == "📅 Hojas de Ruta por Día de Semana":
     dia_sel = st.selectbox("🗓️ Selecciona un día de la semana:", DIAS_SEMANA)
 
     conn = get_connection()
+    # Consulta incluyendo el ID del servicio y del conductor para poder hacer la reasignación
     query_dia = """
-        SELECT s.hora as Hora, s.tipo_servicio as 'Tipo de Servicio', 
+        SELECT s.id as servicio_id, s.hora as Hora, s.tipo_servicio as 'Tipo de Servicio', 
                u.nombre as Paciente, u.estado_movilidad as Movilidad, 
                u.direccion as 'Dirección Recogida/Entrega', u.persona_contacto as 'Contacto', 
                u.telefono_contacto as 'Teléfono', c.nombre as 'Conductor Asignado',
-               s.dias_servicio as 'Días Programados'
+               s.conductor_id, s.dias_servicio as 'Días Programados', s.incidencia as Incidencia
         FROM servicios s
         JOIN usuarios u ON s.usuario_id = u.id
         JOIN conductores c ON s.conductor_id = c.id
@@ -327,20 +325,55 @@ elif opcion == "📅 Hojas de Ruta por Día de Semana":
         ORDER BY s.hora ASC
     """
     df_dia = pd.read_sql_query(query_dia, conn, params=(f"%{dia_sel}%",))
+    df_todos_cond = pd.read_sql_query("SELECT id, nombre FROM conductores WHERE estado = 'Activo'", conn)
     conn.close()
 
-    if not df_dia.empty:
+    if not df_dia.empty and not df_todos_cond.empty:
         st.subheader(f"📋 Cronograma Global - {dia_sel} ({len(df_dia)} trayectos)")
+        
         conductores_unicos = df_dia['Conductor Asignado'].unique()
-        for cond in conductores_unicos:
-            with st.expander(f"🚗 Conductor: {cond}", expanded=True):
-                df_cond = df_dia[df_dia['Conductor Asignado'] == cond]
-                st.dataframe(df_cond.drop(columns=['Conductor Asignado']), use_container_width=True)
-        st.markdown("---")
+        dict_conductores = dict(zip(df_todos_cond['id'], df_todos_cond['nombre']))
+        
+        for cond_nombre in conductores_unicos:
+            with st.expander(f"🚗 Conductor: {cond_nombre}", expanded=True):
+                df_cond = df_dia[df_dia['Conductor Asignado'] == cond_nombre]
+                
+                for idx, fila in df_cond.iterrows():
+                    s_id = fila['servicio_id']
+                    c_id_actual = fila['conductor_id']
+                    
+                    st.markdown(f"**⏰ {fila['Hora']}** | **Paciente:** {fila['Paciente']} ({fila['Movilidad']}) | **Tipo:** {fila['Tipo de Servicio']}")
+                    if fila['Incidencia']:
+                        st.error(f"⚠️ Incidencia reportada: {fila['Incidencia']}")
+                        
+                    c1, c2 = st.columns([3, 1])
+                    with c1:
+                        # Desplegable para reasignar conductor rápidamente
+                        nuevo_cond_id = st.selectbox(
+                            "🔄 Reasignar Conductor:",
+                            options=df_todos_cond['id'].tolist(),
+                            index=df_todos_cond['id'].tolist().index(c_id_actual) if c_id_actual in df_todos_cond['id'].tolist() else 0,
+                            format_func=lambda x: dict_conductores[x],
+                            key=f"reasignar_{s_id}"
+                        )
+                    with c2:
+                        st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                        if st.button("💾 Cambiar", key=f"btn_reint_{s_id}"):
+                            if nuevo_cond_id != c_id_actual:
+                                with get_connection() as conn_up:
+                                    conn_up.execute("UPDATE servicios SET conductor_id = ? WHERE id = ?", (nuevo_cond_id, s_id))
+                                st.toast(f"✅ Reasignado a {dict_conductores[nuevo_cond_id]}")
+                                st.rerun()
+                            else:
+                                st.info("El conductor seleccionado es el mismo.")
+                    st.markdown("---")
+
         st.subheader("📊 Tabla Consolidada")
-        st.dataframe(df_dia, use_container_width=True)
+        cols_mostrar = ['Hora', 'Tipo de Servicio', 'Paciente', 'Movilidad', 'Dirección Recogida/Entrega', 'Contacto', 'Teléfono', 'Conductor Asignado']
+        st.dataframe(df_dia[cols_mostrar], use_container_width='stretch')
     else:
         st.warning(f"No hay servicios asignados en el sistema para el día **{dia_sel}**.")
+
 
 # ---------------------------------------------------------
 # CALENDARIO MENSUAL Y PROGRAMACIÓN DÍA A DÍA
@@ -421,7 +454,7 @@ elif opcion == "📆 Calendario Mensual y Programación":
             else:
                 st.success(f"✅ Hay {len(df_fecha)} trayectos programados exclusivamente para la fecha **{fecha_act.strftime('%d/%m/%Y')}**:")
             
-            st.dataframe(df_fecha, use_container_width=True)
+            st.dataframe(df_fecha, use_container_width='stretch')
         else:
             st.info(f"No hay trayectos guardados para el {fecha_act.strftime('%d/%m/%Y')}.")
 
@@ -497,7 +530,7 @@ elif opcion == "👤 Módulo 1: Usuarios (Alta/Baja/Edición)":
         conn = get_connection()
         df_u = pd.read_sql_query("SELECT * FROM usuarios", conn)
         conn.close()
-        st.dataframe(df_u, use_container_width=True)
+        st.dataframe(df_u, use_container_width='stretch')
 
 # ---------------------------------------------------------
 # MÓDULO 2: CONDUCTORES
@@ -569,7 +602,7 @@ elif opcion == "🚘 Módulo 2: Conductores":
     conn = get_connection()
     df_todos_cond = pd.read_sql_query("SELECT id, nombre as Nombre, telefono as Teléfono, estado as Estado FROM conductores", conn)
     conn.close()
-    st.dataframe(df_todos_cond, use_container_width=True)
+    st.dataframe(df_todos_cond, use_container_width='stretch')
 
 # ---------------------------------------------------------
 # MÓDULO 3: PROGRAMACIÓN GENERAL DE SERVICIOS
@@ -618,7 +651,7 @@ elif opcion == "📋 Módulo 3: Programación de Servicios":
         conn.close()
 
         if not df_servicios.empty:
-            st.dataframe(df_servicios[["id", "Usuario", "Tipo", "Hora", "Conductor", "Días"]], use_container_width=True)
+            st.dataframe(df_servicios[["id", "Usuario", "Tipo", "Hora", "Conductor", "Días"]], use_container_width='stretch')
             
             tab_edit, tab_del = st.tabs(["✏️ Editar Servicio", "❌ Cancelar Servicio"])
             with tab_edit:
@@ -685,6 +718,18 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
         st.markdown("<h3 style='text-align: center; color: #134074;'>📋 Mi Ruta de Hoy</h3>", unsafe_allow_html=True)
         st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
 
+        # Captura GPS Única para el Conductor (evita duplicar la clave 'loc')
+        st.subheader("📍 Capturar mi GPS actual")
+        location = streamlit_geolocation()
+        
+        gps_lat, gps_lon = None, None
+        if location and location.get("latitude") and location.get("longitude"):
+            gps_lat = location["latitude"]
+            gps_lon = location["longitude"]
+            st.success(f"📍 Posición GPS detectada: {gps_lat:.5f}, {gps_lon:.5f}")
+
+        st.markdown("---")
+
         if not df_ruta.empty:
             opciones_estados = ["Pendiente", "En Camino", "Paciente Recogido", "Entregado en Destino", "Incidencia"]
 
@@ -712,7 +757,6 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                 </div>
                 """, unsafe_allow_html=True)
 
-                # --- MINIMAPA GPS ESTILO GOOGLE MAPS ---
                 lat_amb = fila['latitud'] if pd.notna(fila['latitud']) else 43.538100
                 lon_amb = fila['longitud'] if pd.notna(fila['longitud']) else -5.663500
 
@@ -727,36 +771,26 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
 
                 st_folium(mini_map, key=f"minimap_{s_id}_{idx}", width=410, height=200)
 
-                # Enlace directo a Google Maps
                 direccion_encoded = urllib.parse.quote(fila['Dirección'])
                 st.markdown(f"[🗺️ Abrir Navegación en Google Maps](https://www.google.com/maps/search/?api=1&query={direccion_encoded})")
 
-                # Selector de cambio de Estado y capturador GPS automático
                 estado_actual_val = fila['estado_actual'] if fila['estado_actual'] in opciones_estados else "Pendiente"
                 idx_est = opciones_estados.index(estado_actual_val)
 
-                with st.expander("📍 Actualizar Estado / Ubicación GPS", expanded=False):
+                with st.expander("📍 Actualizar Estado del Trayecto", expanded=False):
                     nuevo_estado = st.selectbox("Estado del Trayecto:", opciones_estados, index=idx_est, key=f"est_{s_id}")
-                    
-                    st.write("Presiona para obtener tu ubicación GPS:")
-                    location = streamlit_geolocation()
 
-                    if location and location.get("latitude") and location.get("longitude"):
-                        nueva_lat = location["latitude"]
-                        nueva_lon = location["longitude"]
-                        st.success(f"📍 GPS Detectado: {nueva_lat:.5f}, {nueva_lon:.5f}")
-                    else:
-                        nueva_lat = float(lat_amb)
-                        nueva_lon = float(lon_amb)
+                    if st.button("💾 Guardar Cambios", key=f"btn_save_{s_id}"):
+                        final_lat = gps_lat if gps_lat is not None else float(lat_amb)
+                        final_lon = gps_lon if gps_lon is not None else float(lon_amb)
 
-                    if st.button("💾 Guardar Estado y GPS", key=f"btn_save_{s_id}"):
                         with get_connection() as conn:
                             conn.execute("""
                                 UPDATE servicios 
                                 SET estado_actual = ?, latitud = ?, longitud = ? 
                                 WHERE id = ?
-                            """, (nuevo_estado, nueva_lat, nueva_lon, s_id))
-                        st.toast("✅ Estado y ubicación GPS actualizados")
+                            """, (nuevo_estado, final_lat, final_lon, s_id))
+                        st.toast("✅ Estado y ubicación guardados")
                         st.rerun()
 
                 st.markdown("<hr style='margin:15px 0;'>", unsafe_allow_html=True)
@@ -764,4 +798,5 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("No hay conductores activos para mostrar.")
+
 
