@@ -7,12 +7,11 @@ from streamlit_geolocation import streamlit_geolocation
 import urllib.parse
 
 # ---------------------------------------------------------
-# INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS (Solución al error)
+# INICIALIZACIÓN AUTOMÁTICA DE BASE DE DATOS
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect("ambulancias.db")
     cursor = conn.cursor()
-    # Crear tablas si no existen
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS usuarios (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,10 +48,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-# LLAMA A ESTO AL INICIO DEL SCRIPT
 init_db()
-
-
 
 # ---------------------------------------------------------
 # CONFIGURACIÓN DE LA PÁGINA
@@ -63,9 +59,6 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------------------------------------------------
-# CONEXIÓN A BASE DE DATOS SQLITE
-# ---------------------------------------------------------
 DB_FILE = "ambulancias.db"
 
 def get_connection():
@@ -104,7 +97,6 @@ st.markdown("""
         border-radius: 4px;
         font-size: 11px;
     }
-    /* Estilos de badges por Estado del Trayecto */
     .badge-estado-pendiente {
         background-color: #6c757d;
         color: white;
@@ -279,7 +271,6 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
         st.markdown("<h3 style='text-align: center; color: #134074;'>📋 Mi Ruta de Hoy</h3>", unsafe_allow_html=True)
         st.markdown("<hr style='margin-top:0;'>", unsafe_allow_html=True)
 
-        # Captura GPS Global del Dispositivo del Conductor
         st.subheader("📍 Detectar mi ubicación GPS actual")
         location = streamlit_geolocation()
         
@@ -299,14 +290,12 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                 mov = fila['Movilidad']
                 estado_actual = fila['estado_actual'] if fila['estado_actual'] in opciones_estados else "Pendiente"
                 
-                # Definición de insignia de tipo de movilidad
                 badge_html = (
                     '<span class="badge-wheelchair">♿ Silla</span>' if mov == 'Silla de ruedas' 
                     else '<span class="badge-asistencia">🤝 Asistencia</span>' if mov == 'Asistencia' 
                     else '<span class="badge-autonomo">🚶 Autónomo</span>'
                 )
 
-                # Definición de colores para el estado actual del trayecto
                 if estado_actual == "Pendiente":
                     badge_estado_html = '<span class="badge-estado-pendiente">⏳ Pendiente</span>'
                 elif estado_actual == "En Camino":
@@ -334,7 +323,6 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                 </div>
                 """, unsafe_allow_html=True)
 
-                # Reproducción de sonido si el estado es "Paciente Recogido"
                 if estado_actual == "Paciente Recogido":
                     sound_url = "https://www.soundjay.com/buttons/sounds/button-3.mp3"
                     st.components.v1.html(
@@ -346,7 +334,6 @@ elif opcion == "📱 Módulo 4: Vista Móvil Conductor (Hoja de Ruta)":
                         height=0
                     )
 
-                # Pestañas para alternar entre Mapa del Paciente y Google Maps de Navegación
                 tab_paciente, tab_navegacion = st.tabs(["📍 Ubicación Paciente", "🗺️ Ruta GPS en Vivo (Google Maps)"])
 
                 with tab_paciente:
